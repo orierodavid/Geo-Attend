@@ -1,7 +1,9 @@
 name: Package Geo-Attend
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - wordpress-integration-test
 
 jobs:
   package:
