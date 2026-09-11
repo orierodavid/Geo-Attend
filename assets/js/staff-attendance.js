@@ -18,7 +18,7 @@
     if (state === 'loading') {
       body = '<div class="geo-clock-icon">⌖</div><div><span class="geo-clock-kicker">ATTENDANCE</span><h3>Checking your attendance status</h3><p>Confirming your staff account and today’s attendance.</p></div>';
     } else if (state === 'ready') {
-      body = '<div class="geo-clock-icon">⌖</div><div><span class="geo-clock-kicker">ATTENDANCE</span><h3>Clock in</h3><p>Verify your current location to record today’s attendance. Your signed-in account is used automatically.</p><div class="geo-clock-note">No name or PIN is required.</div><button type="button" id="geo-staff-clock-in">CLOCK IN</button><div class="geo-clock-status" id="geo-staff-clock-status">Location verification starts when you clock in.</div></div>';
+      body = '<div class="geo-clock-icon">⌖</div><div><span class="geo-clock-kicker">ATTENDANCE</span><h3>Clock in</h3><p>Verify your current location to record today’s attendance. Your signed-in account is used automatically.</p><button type="button" id="geo-staff-clock-in">CLOCK IN</button><div class="geo-clock-status" id="geo-staff-clock-status">Location verification starts when you clock in.</div></div>';
     } else if (state === 'checking') {
       body = '<div class="geo-clock-icon is-pulse">⌖</div><div><span class="geo-clock-kicker">ATTENDANCE</span><h3>Verifying your location…</h3><p id="geo-staff-clock-status">Requesting your precise location.</p><button type="button" id="geo-staff-clock-in" disabled>VERIFYING…</button></div>';
     } else if (state === 'approved') {
