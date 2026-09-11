@@ -45,7 +45,7 @@ class Geo_Attend_Public {
         $settings = Geo_Attend_DB::settings();
         $departments = $wpdb->get_results( "SELECT id, name FROM {$t['departments']} WHERE active = 1 ORDER BY name ASC", ARRAY_A );
         $members = $wpdb->get_results( "SELECT id, department_id, first_name, last_name FROM {$t['members']} WHERE active = 1 ORDER BY last_name ASC, first_name ASC", ARRAY_A );
-        $locations = $wpdb->get_results( "SELECT id, name, latitude, longitude, radius_meters FROM {$t['locations']} WHERE active = 1 ORDER BY name ASC", ARRAY_A );
+        $locations = $wpdb->get_results( "SELECT id, name, radius_meters FROM {$t['locations']} WHERE active = 1 ORDER BY name ASC", ARRAY_A );
         $safe_members = array_map( function( $m ) {
             return array( 'id' => (int) $m['id'], 'department_id' => $m['department_id'] ? (int) $m['department_id'] : 0, 'name' => trim( $m['first_name'] . ' ' . $m['last_name'] ) );
         }, $members ?: array() );
@@ -64,7 +64,6 @@ class Geo_Attend_Public {
             'departments' => array_map( function( $d ) { return array( 'id' => (int) $d['id'], 'name' => $d['name'] ); }, $departments ?: array() ),
             'members' => $safe_members,
             'locations' => $safe_locations,
-            'registration_enabled' => ! empty( $settings['allow_registration'] ),
             'schedule' => array( 'days' => array_values( (array) $settings['attendance_days'] ), 'start' => $settings['start_time'], 'end' => $settings['end_time'], 'timezone' => $settings['timezone'] ),
             'open' => $open,
         ) );
@@ -87,6 +86,12 @@ class Geo_Attend_Public {
         $accuracy = isset( $body['accuracy'] ) ? (float) $body['accuracy'] : null;
         if ( ! $member_id || ! $location_id || ! preg_match( '/^\d{4}$/', $pin ) || ! is_finite( $lat ) || ! is_finite( $lng ) ) return new WP_Error( 'invalid_input', 'Select your department, name, location and enter your 4-digit PIN.', array( 'status' => 400 ) );
         if ( $lat < -90 || $lat > 90 || $lng < -180 || $lng > 180 ) return new WP_Error( 'invalid_location', 'The location coordinates are invalid.', array( 'status' => 400 ) );
+        if ( $accuracy !== null && ( ! is_finite( $accuracy ) || $accuracy < 0 ) ) return new WP_Error( 'invalid_accuracy', 'The location accuracy value is invalid.', array( 'status' => 400 ) );
+
+        $member_rate_key = 'geo_attend_member_rate_' . $member_id;
+        $member_attempts = (int) get_transient( $member_rate_key );
+        if ( $member_attempts >= 5 ) return new WP_Error( 'member_rate_limited', 'Too many attempts for this member. Please wait a minute and try again.', array( 'status' => 429 ) );
+        set_transient( $member_rate_key, $member_attempts + 1, MINUTE_IN_SECONDS );
 
         $settings = Geo_Attend_DB::settings();
         $now = Geo_Attend_DB::now( $settings['timezone'] );
@@ -124,7 +129,11 @@ class Geo_Attend_Public {
             'accuracy' => $accuracy,
             'status' => $status,
         ), array( '%d','%d','%d','%s','%s','%f','%f','%f','%s' ) );
-        if ( false === $ok ) return new WP_Error( 'record_failed', 'Unable to record attendance. Please try again.', array( 'status' => 500 ) );
+        if ( false === $ok ) {
+            $existing = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$t['attendance']} WHERE member_id = %d AND attendance_date = %s LIMIT 1", $member_id, $date ) );
+            if ( $existing ) return new WP_Error( 'already_checked_in', 'You have already checked in today.', array( 'status' => 409 ) );
+            return new WP_Error( 'record_failed', 'Unable to record attendance. Please try again.', array( 'status' => 500 ) );
+        }
         return rest_ensure_response( array( 'success' => true, 'name' => trim( $member['first_name'] . ' ' . $member['last_name'] ), 'status' => $status, 'time' => $now->format( 'H:i' ) ) );
     }
 
