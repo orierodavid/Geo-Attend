@@ -72,13 +72,15 @@ jobs:
             global $wpdb;
             $tables = Geo_Attend_DB::tables();
             $staff = get_user_by("email", "ci-valid-staff@example.com");
-            $wpdb->insert($tables["members"], array("user_id"=>$staff->ID,"email"=>$staff->user_email,"first_name"=>"Valid","last_name"=>"Staff","pin_hash"=>"","active"=>1,"created_at"=>current_time("mysql"),"updated_at"=>current_time("mysql")), array("%d","%s","%s","%s","%s","%d","%s","%s"));
+            $wpdb->insert($tables["members"], array("user_id"=>$staff->ID,"email"=>$staff->user_email,"first_name"=>"Valid","last_name"=>"Staff","pin_hash"=>"","active"=>1,"created_at"=>current_time("mysql"),"updated_at"=>current_time("mysql")), array("%d","%s","%s","%s","%s","%s","%d","%s","%s"));
             wp_set_current_user(1);
             $_POST = array("_wpnonce"=>wp_create_nonce("geo_staff_create_task"),"assigned_user_id"=>$staff->ID,"project_id"=>0,"deadline"=>"");
+            $_REQUEST = $_POST;
             Geo_Attend_Task_Guard::validate();
             echo "valid-assignment-ok\n";
             $invalid = get_user_by("email", "ci-invalid@example.com");
             $_POST["assigned_user_id"] = $invalid->ID;
+            $_REQUEST = $_POST;
             add_filter("wp_die_handler", function(){ return function($message){ throw new Exception(wp_strip_all_tags((string)$message)); }; });
             try { Geo_Attend_Task_Guard::validate(); exit(1); } catch (Exception $e) { if (false === strpos($e->getMessage(), "valid staff account")) { throw $e; } echo "invalid-assignment-rejected\n"; }
           '
