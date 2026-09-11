@@ -78,9 +78,9 @@ jobs:
           cd "$RUNNER_TEMP/wp"
           wp eval '
             global $wpdb;
-            $db = Geo_Attend_DB::instance();
-            $now = current_time("timestamp");
-            $day = strtolower(wp_date("D", $now));
+            $t = Geo_Attend_DB::tables();
+            $now = Geo_Attend_DB::now();
+            $day = $now->format("l");
             $settings = get_option("geo_attend_settings", array());
             $settings["attendance_days"] = array($day);
             $settings["start_time"] = "00:00";
@@ -89,34 +89,30 @@ jobs:
             $settings["max_accuracy"] = 100;
             update_option("geo_attend_settings", $settings);
 
-            $department_id = $db->insert_department("Choir", "");
+            $now_sql = current_time("mysql");
+            $wpdb->insert($t["departments"], array("name" => "Choir", "active" => 1, "created_at" => $now_sql, "updated_at" => $now_sql), array("%s", "%d", "%s", "%s"));
+            $department_id = (int) $wpdb->insert_id;
             if (!$department_id) { fwrite(STDERR, "Department insert failed\\n"); exit(1); }
-            $member_id = $db->insert_member($department_id, "Runtime Test Member", "1234");
+            $wpdb->insert($t["members"], array("department_id" => $department_id, "first_name" => "Runtime", "last_name" => "Member", "pin_hash" => wp_hash_password("1234"), "active" => 1, "created_at" => $now_sql, "updated_at" => $now_sql), array("%d", "%s", "%s", "%s", "%d", "%s", "%s"));
+            $member_id = (int) $wpdb->insert_id;
             if (!$member_id) { fwrite(STDERR, "Member insert failed\\n"); exit(1); }
-            $location_id = $db->insert_location("Runtime Location", 6.5244, 3.3792, 100);
+            $wpdb->insert($t["locations"], array("name" => "Runtime Location", "latitude" => 6.5244, "longitude" => 3.3792, "radius_meters" => 100, "active" => 1, "created_at" => $now_sql, "updated_at" => $now_sql), array("%s", "%f", "%f", "%f", "%d", "%s", "%s"));
+            $location_id = (int) $wpdb->insert_id;
             if (!$location_id) { fwrite(STDERR, "Location insert failed\\n"); exit(1); }
 
             $request = new WP_REST_Request("POST", "/geo-attend/v1/check-in");
-            $request->set_param("member_id", $member_id);
-            $request->set_param("location_id", $location_id);
-            $request->set_param("pin", "1234");
-            $request->set_param("lat", 6.5244);
-            $request->set_param("lng", 3.3792);
-            $request->set_param("accuracy", 10);
+            $request->set_header("Content-Type", "application/json");
+            $request->set_body(wp_json_encode(array("member_id" => $member_id, "location_id" => $location_id, "pin" => "1234", "lat" => 6.5244, "lng" => 3.3792, "accuracy" => 10)));
             $response = rest_do_request($request);
             if ($response->get_status() !== 200) { fwrite(STDERR, "Valid check-in failed: ".wp_json_encode($response->get_data())."\\n"); exit(1); }
 
             $duplicate = rest_do_request($request);
             if ($duplicate->get_status() !== 409) { fwrite(STDERR, "Duplicate check-in did not return 409: ".wp_json_encode($duplicate->get_data())."\\n"); exit(1); }
 
-            $wpdb->delete($wpdb->prefix . "geo_attend_attendance", array("member_id" => $member_id, "attendance_date" => wp_date("Y-m-d", $now)), array("%d", "%s"));
+            $wpdb->delete($t["attendance"], array("member_id" => $member_id, "attendance_date" => $now->format("Y-m-d")), array("%d", "%s"));
             $outside = new WP_REST_Request("POST", "/geo-attend/v1/check-in");
-            $outside->set_param("member_id", $member_id);
-            $outside->set_param("location_id", $location_id);
-            $outside->set_param("pin", "1234");
-            $outside->set_param("lat", 6.5244);
-            $outside->set_param("lng", 3.3892);
-            $outside->set_param("accuracy", 10);
+            $outside->set_header("Content-Type", "application/json");
+            $outside->set_body(wp_json_encode(array("member_id" => $member_id, "location_id" => $location_id, "pin" => "1234", "lat" => 6.5244, "lng" => 3.3892, "accuracy" => 10)));
             $outside_response = rest_do_request($outside);
             if ($outside_response->get_status() !== 403) { fwrite(STDERR, "Outside geofence did not return 403: ".wp_json_encode($outside_response->get_data())."\\n"); exit(1); }
 
@@ -131,7 +127,7 @@ jobs:
           set -euo pipefail
           cd "$RUNNER_TEMP/wp"
           wp plugin deactivate geo-attend
-          wp eval-file wp-content/plugins/geo-attend/uninstall.php
+          wp eval 'define("WP_UNINSTALL_PLUGIN", true); require WP_PLUGIN_DIR . "/geo-attend/uninstall.php";'
           wp eval '
             global $wpdb;
             $tables = array(
