@@ -20,12 +20,14 @@ require_once GEO_ATTEND_DIR . 'includes/class-geo-attend-db.php';
 require_once GEO_ATTEND_DIR . 'includes/class-geo-attend-public.php';
 require_once GEO_ATTEND_DIR . 'includes/class-geo-attend-admin.php';
 require_once GEO_ATTEND_DIR . 'includes/class-geo-attend-portal.php';
+require_once GEO_ATTEND_DIR . 'includes/class-geo-attend-task-guard.php';
 require_once GEO_ATTEND_DIR . 'includes/class-geo-attend-portal-access.php';
 register_activation_hook( __FILE__, array( 'Geo_Attend_DB', 'activate' ) );
 add_action( 'plugins_loaded', function() {
     Geo_Attend_DB::maybe_upgrade();
     Geo_Attend_Public::init();
     Geo_Attend_Portal::init();
+    Geo_Attend_Task_Guard::init();
     Geo_Attend_Portal_Access::init();
     if ( is_admin() ) { Geo_Attend_Admin::init(); }
 } );
