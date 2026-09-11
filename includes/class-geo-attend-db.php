@@ -83,7 +83,7 @@ class Geo_Attend_DB {
                 'end_time' => '16:30',
                 'late_after' => 0,
                 'max_accuracy' => 100,
-                'allow_registration' => true,
+                'allow_registration' => false,
             ) );
         }
         update_option( 'geo_attend_version', GEO_ATTEND_VERSION );
@@ -99,7 +99,7 @@ class Geo_Attend_DB {
             'end_time' => '16:30',
             'late_after' => 0,
             'max_accuracy' => 100,
-            'allow_registration' => true,
+            'allow_registration' => false,
         );
         $settings = get_option( 'geo_attend_settings', array() );
         return wp_parse_args( is_array( $settings ) ? $settings : array(), $defaults );
