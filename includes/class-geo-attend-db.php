@@ -73,36 +73,30 @@ class Geo_Attend_DB {
             KEY location_id (location_id)
         ) $charset;";
         foreach ( $sql as $statement ) dbDelta( $statement );
+
         if ( false === get_option( 'geo_attend_settings', false ) ) {
-            add_option( 'geo_attend_settings', array(
-                'organization_name' => get_bloginfo( 'name' ),
-                'organization_logo' => '',
-                'timezone' => wp_timezone_string() ?: 'UTC',
-                'attendance_days' => array( 'Saturday' ),
-                'start_time' => '15:00',
-                'end_time' => '16:30',
-                'late_after' => 0,
-                'max_accuracy' => 100,
-                'allow_registration' => false,
-            ) );
+            add_option( 'geo_attend_settings', self::default_settings() );
         }
         update_option( 'geo_attend_version', GEO_ATTEND_VERSION );
     }
 
-    public static function settings() {
-        $defaults = array(
+    public static function default_settings() {
+        return array(
             'organization_name' => get_bloginfo( 'name' ),
             'organization_logo' => '',
             'timezone' => wp_timezone_string() ?: 'UTC',
-            'attendance_days' => array( 'Saturday' ),
-            'start_time' => '15:00',
-            'end_time' => '16:30',
-            'late_after' => 0,
+            'attendance_days' => array(),
+            'start_time' => '09:00',
+            'end_time' => '17:00',
+            'late_after' => 15,
             'max_accuracy' => 100,
             'allow_registration' => false,
         );
+    }
+
+    public static function settings() {
         $settings = get_option( 'geo_attend_settings', array() );
-        return wp_parse_args( is_array( $settings ) ? $settings : array(), $defaults );
+        return wp_parse_args( is_array( $settings ) ? $settings : array(), self::default_settings() );
     }
 
     public static function now( $timezone = null ) {
