@@ -2,7 +2,7 @@ name: WordPress Runtime
 
 on:
   push:
-    branches: [wordpress-integration-test, wordpress-conversion]
+    branches: [wordpress-integration-test, wordpress-conversion, staff-portal-auth]
   pull_request:
     branches: [wordpress-conversion, main]
 
@@ -51,10 +51,19 @@ jobs:
           wp plugin activate geo-attend
           wp eval '
             global $wpdb;
-            $tables = array($wpdb->prefix . "geo_attend_departments", $wpdb->prefix . "geo_attend_members", $wpdb->prefix . "geo_attend_locations", $wpdb->prefix . "geo_attend_attendance");
+            $tables = array(
+              $wpdb->prefix . "geo_attend_departments",
+              $wpdb->prefix . "geo_attend_members",
+              $wpdb->prefix . "geo_attend_locations",
+              $wpdb->prefix . "geo_attend_attendance",
+              $wpdb->prefix . "geo_attend_projects",
+              $wpdb->prefix . "geo_attend_tasks"
+            );
             foreach ($tables as $table) { if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) !== $table) { fwrite(STDERR, "Missing table: $table\\n"); exit(1); } }
             if (false === get_option("geo_attend_settings", false)) { fwrite(STDERR, "Missing settings option\\n"); exit(1); }
-            if (!shortcode_exists("geo_attend")) { fwrite(STDERR, "Shortcode not registered\\n"); exit(1); }
+            if (!get_role("geo_staff")) { fwrite(STDERR, "Missing geo_staff role\\n"); exit(1); }
+            if (!shortcode_exists("geo_attend")) { fwrite(STDERR, "Attendance shortcode not registered\\n"); exit(1); }
+            if (!shortcode_exists("geo_staff_portal")) { fwrite(STDERR, "Staff portal shortcode not registered\\n"); exit(1); }
             echo "Schema/bootstrap checks passed.\\n";
           '
       - name: Exercise REST API and geofence
@@ -112,8 +121,17 @@ jobs:
           wp eval 'define("WP_UNINSTALL_PLUGIN", true); require WP_PLUGIN_DIR . "/geo-attend/uninstall.php";'
           wp eval '
             global $wpdb;
-            $tables = array($wpdb->prefix . "geo_attend_departments", $wpdb->prefix . "geo_attend_members", $wpdb->prefix . "geo_attend_locations", $wpdb->prefix . "geo_attend_attendance");
+            $tables = array(
+              $wpdb->prefix . "geo_attend_departments",
+              $wpdb->prefix . "geo_attend_members",
+              $wpdb->prefix . "geo_attend_locations",
+              $wpdb->prefix . "geo_attend_attendance",
+              $wpdb->prefix . "geo_attend_projects",
+              $wpdb->prefix . "geo_attend_tasks"
+            );
             foreach ($tables as $table) { if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) === $table) { fwrite(STDERR, "Table remains after uninstall: $table\\n"); exit(1); } }
             if (false !== get_option("geo_attend_settings", false)) { fwrite(STDERR, "Settings option remains after uninstall\\n"); exit(1); }
+            if (false !== get_option("geo_attend_staff_portal_page_id", false)) { fwrite(STDERR, "Staff portal page option remains after uninstall\\n"); exit(1); }
+            if (get_role("geo_staff")) { fwrite(STDERR, "geo_staff role remains after uninstall\\n"); exit(1); }
             echo "Uninstall cleanup passed.\\n";
           '
