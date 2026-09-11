@@ -16,9 +16,7 @@
   function render(message) { root.innerHTML = message; }
   function app() {
     const c = config;
-    const departments = c.departments || [];
     const locations = c.locations || [];
-    const members = c.members || [];
     const days = (c.schedule && c.schedule.days) || [];
     const start = formatTime(c.schedule && c.schedule.start);
     const end = formatTime(c.schedule && c.schedule.end);
@@ -31,27 +29,20 @@
         <div class="geo-attend-intro"><span>ATTENDANCE</span><h2>${c.open ? 'Mark your attendance' : 'Check-in is currently closed'}</h2><p>${c.open ? `Available ${escapeHtml(days.join(', '))} · ${escapeHtml(start)}–${escapeHtml(end)}` : `Available ${escapeHtml(days.join(', '))} between ${escapeHtml(start)} and ${escapeHtml(end)}.`}</p></div>
         ${c.open ? `
         <form class="geo-attend-form" id="geo-attend-form">
-          <label>Department<select id="geo-department" required><option value="">Select department</option>${departments.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('')}</select></label>
-          <label>Name<select id="geo-member" required disabled><option value="">Select department first</option></select></label>
-          <label>Attendance location<select id="geo-location" required>${locations.map(l => `<option value="${l.id}">${escapeHtml(l.name)} · within ${Math.round(l.radius_meters)}m</option>`).join('')}</select></label>
+          <label>Name<input id="geo-member-name" type="text" autocomplete="name" autocapitalize="words" placeholder="Enter your full name" required></label>
           <label>4-digit PIN<input id="geo-pin" type="password" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" placeholder="••••" required></label>
+          <label>Attendance location<select id="geo-location" required>${locations.map(l => `<option value="${l.id}">${escapeHtml(l.name)} · within ${Math.round(l.radius_meters)}m</option>`).join('')}</select></label>
           <div class="geo-location-status" id="geo-location-status">Location will be requested when you check in.</div>
           <div class="geo-attend-error" id="geo-error" hidden></div>
           <button type="submit" id="geo-submit">CHECK IN</button>
         </form>` : `<div class="geo-attend-closed">Next available check-in window: ${escapeHtml(start)}–${escapeHtml(end)}.</div>`}
       </div>`;
     if (!c.open) return;
-    const dept = document.getElementById('geo-department');
-    const member = document.getElementById('geo-member');
+    const memberName = document.getElementById('geo-member-name');
+    const pin = document.getElementById('geo-pin');
     const form = document.getElementById('geo-attend-form');
     const error = document.getElementById('geo-error');
     const status = document.getElementById('geo-location-status');
-    dept.addEventListener('change', function () {
-      const selected = Number(this.value);
-      const list = members.filter(m => Number(m.department_id) === selected);
-      member.innerHTML = '<option value="">Select your name</option>' + list.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
-      member.disabled = !selected;
-    });
     form.addEventListener('submit', async function (event) {
       event.preventDefault(); error.hidden = true;
       const button = document.getElementById('geo-submit');
@@ -60,7 +51,7 @@
       navigator.geolocation.getCurrentPosition(async function (position) {
         status.textContent = `Location ready · ±${Math.round(position.coords.accuracy)}m accuracy`;
         try {
-          const response = await fetch(api + '/check-in', { method: 'POST', headers: {'Content-Type':'application/json','X-WP-Nonce':window.GeoAttend.nonce}, body: JSON.stringify({ member_id:Number(member.value), location_id:Number(document.getElementById('geo-location').value), pin:document.getElementById('geo-pin').value, lat:position.coords.latitude, lng:position.coords.longitude, accuracy:position.coords.accuracy }) });
+          const response = await fetch(api + '/check-in', { method: 'POST', headers: {'Content-Type':'application/json','X-WP-Nonce':window.GeoAttend.nonce}, body: JSON.stringify({ member_name:memberName.value.trim(), location_id:Number(document.getElementById('geo-location').value), pin:pin.value, lat:position.coords.latitude, lng:position.coords.longitude, accuracy:position.coords.accuracy }) });
           const data = await response.json();
           if (!response.ok) throw new Error(data.message || 'Unable to complete check-in.');
           root.innerHTML = `<div class="geo-attend-card geo-attend-success"><div class="geo-success-icon">✓</div><span>ATTENDANCE CONFIRMED</span><h2>You’re marked present.</h2><p>${escapeHtml(data.name)} · ${escapeHtml(data.status === 'late' ? 'Late attendance recorded.' : 'Attendance recorded successfully.')} ${escapeHtml(data.time || '')}</p><button type="button" id="geo-again">BACK TO CHECK-IN</button></div>`;
