@@ -4,8 +4,11 @@
  * Plugin URI: https://github.com/orierodavid/Geo-Attend
  * Description: Configurable geofenced attendance for organizations, churches, schools and teams. Uses the WordPress database with no external database dependency.
  * Version: 0.1.0
+ * Requires at least: 6.5
+ * Requires PHP: 7.4
  * Author: Deotech Web Technologies
  * License: GPL-2.0-or-later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: geo-attend
  */
 
