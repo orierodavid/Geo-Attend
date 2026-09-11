@@ -4,9 +4,14 @@
   if (!root || !window.GeoAttend) return;
   const api = window.GeoAttend.api;
   let config = null;
-
-  function escapeHtml(value) {
-    return String(value == null ? '' : value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));
+  function escapeHtml(value) { return String(value == null ? '' : value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c])); }
+  function formatTime(value) {
+    const match = String(value || '').match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return String(value || '');
+    const hour = Number(match[1]); const minute = Number(match[2]);
+    if (hour > 23 || minute > 59) return String(value || '');
+    const suffix = hour >= 12 ? 'PM' : 'AM'; const displayHour = hour % 12 || 12;
+    return `${displayHour}:${String(minute).padStart(2, '0')} ${suffix}`;
   }
   function render(message) { root.innerHTML = message; }
   function app() {
@@ -14,13 +19,16 @@
     const departments = c.departments || [];
     const locations = c.locations || [];
     const members = c.members || [];
+    const days = (c.schedule && c.schedule.days) || [];
+    const start = formatTime(c.schedule && c.schedule.start);
+    const end = formatTime(c.schedule && c.schedule.end);
     root.innerHTML = `
       <div class="geo-attend-card">
         <div class="geo-attend-brand">${c.organization_logo ? `<img src="${escapeHtml(c.organization_logo)}" alt="">` : '<span class="geo-attend-mark">G</span>'}
-          <div><strong>${escapeHtml(c.organization_name)}</strong><small>Geo-Attend</small></div>
+          <div><strong>${escapeHtml(c.organization_name)}</strong><small>Attendance</small></div>
         </div>
         <div class="geo-attend-status ${c.open ? 'is-open' : 'is-closed'}">${c.open ? 'CHECK-IN OPEN' : 'CHECK-IN CLOSED'}</div>
-        <div class="geo-attend-intro"><span>ATTENDANCE</span><h2>${c.open ? 'Mark your attendance' : 'Check-in is currently closed'}</h2><p>${c.open ? `Available ${escapeHtml((c.schedule.days || []).join(', '))} · ${escapeHtml(c.schedule.start)}–${escapeHtml(c.schedule.end)}` : `Available ${escapeHtml((c.schedule.days || []).join(', '))} between ${escapeHtml(c.schedule.start)} and ${escapeHtml(c.schedule.end)}.`}</p></div>
+        <div class="geo-attend-intro"><span>ATTENDANCE</span><h2>${c.open ? 'Mark your attendance' : 'Check-in is currently closed'}</h2><p>${c.open ? `Available ${escapeHtml(days.join(', '))} · ${escapeHtml(start)}–${escapeHtml(end)}` : `Available ${escapeHtml(days.join(', '))} between ${escapeHtml(start)} and ${escapeHtml(end)}.`}</p></div>
         ${c.open ? `
         <form class="geo-attend-form" id="geo-attend-form">
           <label>Department<select id="geo-department" required><option value="">Select department</option>${departments.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('')}</select></label>
@@ -30,10 +38,8 @@
           <div class="geo-location-status" id="geo-location-status">Location will be requested when you check in.</div>
           <div class="geo-attend-error" id="geo-error" hidden></div>
           <button type="submit" id="geo-submit">CHECK IN</button>
-        </form>` : `<div class="geo-attend-closed">The attendance window is not active right now.</div>`}
-        ${c.registration_enabled ? '<p class="geo-attend-foot">Need a profile? Contact your administrator to register.</p>' : ''}
+        </form>` : `<div class="geo-attend-closed">Next available check-in window: ${escapeHtml(start)}–${escapeHtml(end)}.</div>`}
       </div>`;
-
     if (!c.open) return;
     const dept = document.getElementById('geo-department');
     const member = document.getElementById('geo-member');
@@ -64,6 +70,5 @@
       function fail(message) { error.textContent = message; error.hidden = false; button.disabled = false; button.textContent = 'CHECK IN'; status.textContent = 'Location is required to verify attendance.'; }
     });
   }
-
   fetch(api + '/config', {headers:{'X-WP-Nonce':window.GeoAttend.nonce}, cache:'no-store'}).then(r => r.json()).then(data => { if (data.code) throw new Error(data.message || 'Unable to load attendance configuration.'); config = data; app(); }).catch(e => render(`<div class="geo-attend-card geo-attend-error-card"><strong>Geo-Attend unavailable</strong><p>${escapeHtml(e.message)}</p></div>`));
 })();
