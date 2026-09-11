@@ -4,7 +4,7 @@ on:
   push:
     branches: [staff-portal-auth]
   pull_request:
-    branches: [staff-portal-auth]
+    branches: [main]
 
 jobs:
   wordpress:
