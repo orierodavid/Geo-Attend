@@ -72,7 +72,7 @@ jobs:
             global $wpdb;
             $tables = Geo_Attend_DB::tables();
             $staff = get_user_by("email", "ci-valid-staff@example.com");
-            $wpdb->insert($tables["members"], array("user_id"=>$staff->ID,"email"=>$staff->user_email,"first_name"=>"Valid","last_name"=>"Staff","pin_hash"=>"","active"=>1,"created_at"=>current_time("mysql"),"updated_at"=>current_time("mysql")), array("%d","%s","%s","%s","%s","%s","%d","%s","%s"));
+            $wpdb->insert($tables["members"], array("user_id"=>$staff->ID,"email"=>$staff->user_email,"first_name"=>"Valid","last_name"=>"Staff","pin_hash"=>"","active"=>1,"created_at"=>current_time("mysql"),"updated_at"=>current_time("mysql")), array("%d","%s","%s","%s","%s","%d","%s","%s"));
             wp_set_current_user(1);
             $_POST = array("_wpnonce"=>wp_create_nonce("geo_staff_create_task"),"assigned_user_id"=>$staff->ID,"project_id"=>0,"deadline"=>"");
             $_REQUEST = $_POST;
