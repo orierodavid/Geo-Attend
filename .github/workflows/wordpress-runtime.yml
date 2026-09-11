@@ -89,6 +89,8 @@ jobs:
             $request->set_body(wp_json_encode(array("member_name" => "Runtime Member", "pin" => "1234", "lat" => 6.5244, "lng" => 3.3792, "accuracy" => 10)));
             $response = rest_do_request($request);
             if ($response->get_status() !== 200) { fwrite(STDERR, "Valid name+PIN check-in failed: ".wp_json_encode($response->get_data())."\\n"); exit(1); }
+            $record = $wpdb->get_row($wpdb->prepare("SELECT member_id, department_id, location_id FROM {$t["attendance"]} WHERE member_id = %d ORDER BY id DESC LIMIT 1", $member_id), ARRAY_A);
+            if (!$record || (int)$record["member_id"] !== $member_id || (int)$record["department_id"] !== $department_id || (int)$record["location_id"] !== $location_id) { fwrite(STDERR, "Attendance identity/department/location linkage failed.\\n"); exit(1); }
             $duplicate = rest_do_request($request);
             if ($duplicate->get_status() !== 409) { fwrite(STDERR, "Duplicate check-in did not return 409: ".wp_json_encode($duplicate->get_data())."\\n"); exit(1); }
             $wpdb->delete($t["attendance"], array("member_id" => $member_id, "attendance_date" => $now->format("Y-m-d")), array("%d", "%s"));
@@ -97,8 +99,6 @@ jobs:
             $outside->set_body(wp_json_encode(array("member_name" => "Runtime Member", "pin" => "1234", "lat" => 6.5244, "lng" => 3.3892, "accuracy" => 10)));
             $outside_response = rest_do_request($outside);
             if ($outside_response->get_status() !== 403) { fwrite(STDERR, "Outside geofence did not return 403: ".wp_json_encode($outside_response->get_data())."\\n"); exit(1); }
-            $record = $wpdb->get_row($wpdb->prepare("SELECT member_id, department_id, location_id FROM {$t["attendance"]} WHERE member_id = %d ORDER BY id DESC LIMIT 1", $member_id), ARRAY_A);
-            if (!$record || (int)$record["member_id"] !== $member_id || (int)$record["department_id"] !== $department_id || (int)$record["location_id"] !== $location_id) { fwrite(STDERR, "Attendance identity/department/location linkage failed.\\n"); exit(1); }
             $config = rest_do_request(new WP_REST_Request("GET", "/geo-attend/v1/config"));
             if ($config->get_status() !== 200) { fwrite(STDERR, "Config endpoint failed\\n"); exit(1); }
             echo "REST/name+PIN/geofence/department checks passed.\\n";
