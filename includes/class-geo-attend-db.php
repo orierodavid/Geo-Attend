@@ -18,7 +18,6 @@ class Geo_Attend_DB {
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         $t = self::tables();
         $charset = $wpdb->get_charset_collate();
-
         $sql = array();
         $sql[] = "CREATE TABLE {$t['departments']} (
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -73,43 +72,34 @@ class Geo_Attend_DB {
             KEY department_id (department_id),
             KEY location_id (location_id)
         ) $charset;";
-
-        foreach ( $sql as $statement ) {
-            dbDelta( $statement );
-        }
-
+        foreach ( $sql as $statement ) dbDelta( $statement );
         if ( false === get_option( 'geo_attend_settings', false ) ) {
             add_option( 'geo_attend_settings', array(
                 'organization_name' => get_bloginfo( 'name' ),
                 'organization_logo' => '',
-                'timezone'          => wp_timezone_string() ?: 'UTC',
-                'attendance_days'   => array( 'Saturday' ),
-                'start_time'        => '15:00',
-                'end_time'          => '16:30',
-                'late_after'        => 0,
-                'max_accuracy'      => 100,
-                'allow_registration'=> true,
+                'timezone' => wp_timezone_string() ?: 'UTC',
+                'attendance_days' => array( 'Saturday' ),
+                'start_time' => '15:00',
+                'end_time' => '16:30',
+                'late_after' => 0,
+                'max_accuracy' => 100,
+                'allow_registration' => true,
             ) );
         }
-
-        if ( false === get_option( 'geo_attend_version', false ) ) {
-            add_option( 'geo_attend_version', GEO_ATTEND_VERSION );
-        } else {
-            update_option( 'geo_attend_version', GEO_ATTEND_VERSION );
-        }
+        update_option( 'geo_attend_version', GEO_ATTEND_VERSION );
     }
 
     public static function settings() {
         $defaults = array(
             'organization_name' => get_bloginfo( 'name' ),
             'organization_logo' => '',
-            'timezone'          => wp_timezone_string() ?: 'UTC',
-            'attendance_days'   => array( 'Saturday' ),
-            'start_time'        => '15:00',
-            'end_time'          => '16:30',
-            'late_after'        => 0,
-            'max_accuracy'      => 100,
-            'allow_registration'=> true,
+            'timezone' => wp_timezone_string() ?: 'UTC',
+            'attendance_days' => array( 'Saturday' ),
+            'start_time' => '15:00',
+            'end_time' => '16:30',
+            'late_after' => 0,
+            'max_accuracy' => 100,
+            'allow_registration' => true,
         );
         $settings = get_option( 'geo_attend_settings', array() );
         return wp_parse_args( is_array( $settings ) ? $settings : array(), $defaults );
@@ -121,13 +111,8 @@ class Geo_Attend_DB {
         return new DateTimeImmutable( 'now', $zone );
     }
 
-    public static function hash_pin( $pin ) {
-        return password_hash( (string) $pin, PASSWORD_DEFAULT );
-    }
-
-    public static function verify_pin( $pin, $hash ) {
-        return password_verify( (string) $pin, (string) $hash );
-    }
+    public static function hash_pin( $pin ) { return wp_hash_password( (string) $pin ); }
+    public static function verify_pin( $pin, $hash ) { return wp_check_password( (string) $pin, (string) $hash ); }
 
     public static function normalize_name( $value ) {
         $value = sanitize_text_field( wp_unslash( $value ) );
