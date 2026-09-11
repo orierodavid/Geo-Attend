@@ -1,0 +1,26 @@
+name: Package Geo-Attend
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build plugin ZIP
+        run: |
+          set -e
+          mkdir -p build/geo-attend
+          rsync -a --exclude='.git' --exclude='.github' --exclude='build' --exclude='README.md' ./ build/geo-attend/
+          cd build
+          zip -r ../geo-attend.zip geo-attend -x 'geo-attend/.git/*'
+
+      - name: Upload plugin ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: geo-attend-wordpress-plugin
+          path: geo-attend.zip
+          if-no-files-found: error
