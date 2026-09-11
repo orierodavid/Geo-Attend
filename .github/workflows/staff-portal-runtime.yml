@@ -49,7 +49,7 @@ jobs:
           cd "$RUNNER_TEMP/wp"
           wp plugin activate geo-attend
           wp eval 'if (!get_role("geo_staff")) { exit(1); } if (!shortcode_exists("geo_staff_portal")) { exit(1); } if (false === has_action("admin_post_nopriv_geo_staff_login")) { exit(1); } echo "bootstrap-ok\n";'
-          page_id="$(wp option get geo_attend_staff_portal_page_id --format=plaintext)"
+          page_id="$(wp option get geo_attend_staff_portal_page_id)"
           test -n "$page_id"
           test "$(wp post get "$page_id" --field=post_status)" = publish
           test "$(wp post get "$page_id" --field=post_content)" = '[geo_staff_portal]'
