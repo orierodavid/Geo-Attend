@@ -1,0 +1,64 @@
+name: Staff Portal Runtime
+
+on:
+  push:
+    branches: [staff-portal-auth]
+  pull_request:
+    branches: [staff-portal-auth]
+
+jobs:
+  wordpress:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mysqli,mbstring
+          tools: wp-cli
+      - name: Install WordPress
+        env:
+          WP_ADMIN_PASSWORD: ci-admin-pass-123
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wp"
+          cd "$RUNNER_TEMP/wp"
+          wp core download --version=6.8.2
+          wp config create --dbname=wordpress --dbuser=root --dbpass=root --dbhost=127.0.0.1 --skip-check
+          wp core install --url=http://localhost --title=Runtime --admin_user=admin --admin_password="$WP_ADMIN_PASSWORD" --admin_email=ci@example.com --skip-email
+          mkdir -p wp-content/plugins/geo-attend
+          cp -R "$GITHUB_WORKSPACE"/. wp-content/plugins/geo-attend/
+      - name: Syntax check
+        run: |
+          set -euo pipefail
+          find . -type f -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
+      - name: Activate and verify staff portal
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/wp"
+          wp plugin activate geo-attend
+          wp eval 'if (!get_role("geo_staff")) { exit(1); } if (!shortcode_exists("geo_staff_portal")) { exit(1); } if (false === has_action("admin_post_nopriv_geo_staff_login")) { exit(1); } echo "bootstrap-ok\n";'
+          page_id="$(wp option get geo_attend_staff_portal_page_id --format=plaintext)"
+          test -n "$page_id"
+          test "$(wp post get "$page_id" --field=post_status)" = publish
+          test "$(wp post get "$page_id" --field=post_content)" = '[geo_staff_portal]'
+          wp eval 'wp_set_current_user(0); $html=do_shortcode("[geo_staff_portal]"); if (false===strpos($html,"Sign in to your workspace")) { exit(1); } echo "login-ui-ok\n";'
+      - name: Verify authenticated staff task view
+        env:
+          STAFF_PASSWORD: ci-staff-pass-123
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/wp"
+          wp user create ci-staff ci-staff@example.com --role=geo_staff --user_pass="$STAFF_PASSWORD" --first_name=CI --last_name=Staff --porcelain
+          wp eval 'global $wpdb; $u=get_user_by("email","ci-staff@example.com"); wp_set_current_user($u->ID); $t=Geo_Attend_DB::tables(); $wpdb->insert($t["tasks"],array("title"=>"CI assigned task","assigned_user_id"=>$u->ID,"created_by"=>1,"priority"=>"high","status"=>"todo","created_at"=>current_time("mysql"),"updated_at"=>current_time("mysql")),array("%s","%d","%d","%s","%s","%s","%s")); $html=do_shortcode("[geo_staff_portal]"); if(false===strpos($html,"CI assigned task")){exit(1);} echo "staff-task-ui-ok\n";'
