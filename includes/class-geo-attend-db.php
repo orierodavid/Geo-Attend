@@ -72,12 +72,19 @@ class Geo_Attend_DB {
             KEY department_id (department_id),
             KEY location_id (location_id)
         ) $charset;";
-        foreach ( $sql as $statement ) dbDelta( $statement );
+        foreach ( $sql as $statement ) { dbDelta( $statement ); }
 
         if ( false === get_option( 'geo_attend_settings', false ) ) {
             add_option( 'geo_attend_settings', self::default_settings() );
         }
         update_option( 'geo_attend_version', GEO_ATTEND_VERSION );
+    }
+
+    public static function maybe_upgrade() {
+        $installed = get_option( 'geo_attend_version', '' );
+        if ( version_compare( (string) $installed, GEO_ATTEND_VERSION, '<' ) ) {
+            self::activate();
+        }
     }
 
     public static function default_settings() {
@@ -90,7 +97,6 @@ class Geo_Attend_DB {
             'end_time' => '17:00',
             'late_after' => 15,
             'max_accuracy' => 100,
-            'allow_registration' => false,
         );
     }
 
