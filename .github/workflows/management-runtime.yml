@@ -47,14 +47,16 @@ jobs:
           cd "$RUNNER_TEMP/wp"
           wp plugin activate geo-attend
           wp eval '
-            global $wpdb;
+            global $wpdb, $submenu;
             $members = $wpdb->prefix . "geo_attend_members";
             $columns = $wpdb->get_col("SHOW COLUMNS FROM {$members}", 0);
             if (!in_array("location_id", $columns, true)) { fwrite(STDERR, "location_id missing from members schema\\n"); exit(1); }
-            if (false === has_action("admin_post_geo_staff_create_account")) { fwrite(STDERR, "staff account handler missing\\n"); exit(1); }
-            if (false === has_action("admin_post_geo_staff_create_task")) { fwrite(STDERR, "task handler missing\\n"); exit(1); }
-            do_action("admin_menu");
-            global $submenu;
+            if (false === has_action("admin_post_geo_staff_create_account", array("Geo_Attend_Management", "create_account"))) { fwrite(STDERR, "staff account management handler missing\\n"); exit(1); }
+            if (false === has_action("admin_post_geo_staff_create_task", array("Geo_Attend_Management", "create_task"))) { fwrite(STDERR, "task management handler missing\\n"); exit(1); }
+            if (false !== has_action("admin_post_geo_staff_create_account", array("Geo_Attend_Portal", "create_account"))) { fwrite(STDERR, "legacy staff account handler still registered\\n"); exit(1); }
+            if (false !== has_action("admin_post_geo_staff_create_task", array("Geo_Attend_Portal", "create_task"))) { fwrite(STDERR, "legacy task handler still registered\\n"); exit(1); }
+            Geo_Attend_Admin::menu();
+            Geo_Attend_Management::replace_menus();
             $slugs = array();
             foreach ((array) ($submenu["geo-attend"] ?? array()) as $item) { $slugs[] = $item[2]; }
             if (!in_array("geo-attend-staff", $slugs, true) || !in_array("geo-attend-tasks", $slugs, true)) { fwrite(STDERR, "management admin pages not registered\\n"); exit(1); }
