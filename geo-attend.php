@@ -29,6 +29,13 @@ add_action( 'plugins_loaded', function() {
     Geo_Attend_DB::maybe_upgrade();
     Geo_Attend_Public::init();
     Geo_Attend_Portal::init();
+
+    // Management owns the administrator account/task submission endpoints.
+    // Remove the legacy portal handlers before requests can reach admin-post.php.
+    remove_action( 'admin_menu', array( 'Geo_Attend_Portal', 'menu' ) );
+    remove_action( 'admin_post_geo_staff_create_account', array( 'Geo_Attend_Portal', 'create_account' ) );
+    remove_action( 'admin_post_geo_staff_create_task', array( 'Geo_Attend_Portal', 'create_task' ) );
+
     Geo_Attend_Task_Guard::init();
     Geo_Attend_Portal_Access::init();
     Geo_Attend_Task_Attachments::init();
