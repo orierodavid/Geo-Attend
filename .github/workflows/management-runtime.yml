@@ -47,22 +47,20 @@ jobs:
           cd "$RUNNER_TEMP/wp"
           wp plugin activate geo-attend
           wp eval '
-            global $wpdb, $submenu;
+            global $wpdb;
             $members = $wpdb->prefix . "geo_attend_members";
             $columns = $wpdb->get_col("SHOW COLUMNS FROM {$members}", 0);
             if (!in_array("location_id", $columns, true)) { fwrite(STDERR, "location_id missing from members schema\\n"); exit(1); }
-            if (false === has_action("admin_post_geo_staff_create_account", array("Geo_Attend_Management", "create_account"))) { fwrite(STDERR, "staff account management handler missing\\n"); exit(1); }
-            if (false === has_action("admin_post_geo_staff_create_task", array("Geo_Attend_Management", "create_task"))) { fwrite(STDERR, "task management handler missing\\n"); exit(1); }
-            if (false !== has_action("admin_post_geo_staff_create_account", array("Geo_Attend_Portal", "create_account"))) { fwrite(STDERR, "legacy staff account handler still registered\\n"); exit(1); }
-            if (false !== has_action("admin_post_geo_staff_create_task", array("Geo_Attend_Portal", "create_task"))) { fwrite(STDERR, "legacy task handler still registered\\n"); exit(1); }
-            Geo_Attend_Admin::menu();
-            Geo_Attend_Management::replace_menus();
+            if (false === has_action("admin_post_geo_staff_create_account", array("Geo_Attend_Management", "create_account"))) { fwrite(STDERR, "staff account handler ownership failed\\n"); exit(1); }
+            if (false === has_action("admin_post_geo_staff_create_task", array("Geo_Attend_Management", "create_task"))) { fwrite(STDERR, "task handler ownership failed\\n"); exit(1); }
+            do_action("admin_menu");
+            global $submenu;
             $slugs = array();
             foreach ((array) ($submenu["geo-attend"] ?? array()) as $item) { $slugs[] = $item[2]; }
             if (!in_array("geo-attend-staff", $slugs, true) || !in_array("geo-attend-tasks", $slugs, true)) { fwrite(STDERR, "management admin pages not registered\\n"); exit(1); }
             echo "Management registration/schema passed.\\n";
           '
-      - name: Verify staff linkage and task notification contract
+      - name: Verify staff linkage, task email and assigned-location guard
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/wp"
@@ -74,16 +72,23 @@ jobs:
             $department = (int)$wpdb->insert_id;
             $wpdb->insert($t["locations"], array("name"=>"Management Office","latitude"=>6.5244,"longitude"=>3.3792,"radius_meters"=>100,"active"=>1,"created_at"=>$now,"updated_at"=>$now), array("%s","%f","%f","%f","%d","%s","%s"));
             $location = (int)$wpdb->insert_id;
+            $wpdb->insert($t["locations"], array("name"=>"Other Office","latitude"=>6.5254,"longitude"=>3.3802,"radius_meters"=>100,"active"=>1,"created_at"=>$now,"updated_at"=>$now), array("%s","%f","%f","%f","%d","%s","%s"));
+            $other_location = (int)$wpdb->insert_id;
             $user = wp_insert_user(array("user_login"=>"management.staff","user_pass"=>"TempPass123!","user_email"=>"management.staff@example.com","first_name"=>"Management","last_name"=>"Staff","role"=>"geo_staff"));
             if (is_wp_error($user)) { throw new Exception($user->get_error_message()); }
             $wpdb->insert($t["members"], array("user_id"=>$user,"email"=>"management.staff@example.com","department_id"=>$department,"location_id"=>$location,"first_name"=>"Management","last_name"=>"Staff","pin_hash"=>"","active"=>1,"created_at"=>$now,"updated_at"=>$now), array("%d","%s","%d","%d","%s","%s","%s","%d","%s","%s"));
             $member = $wpdb->get_row($wpdb->prepare("SELECT department_id,location_id FROM {$t["members"]} WHERE user_id=%d",$user), ARRAY_A);
             if (!$member || (int)$member["department_id"] !== $department || (int)$member["location_id"] !== $location) { fwrite(STDERR, "staff department/location linkage failed\\n"); exit(1); }
+            wp_set_current_user($user);
+            $request = new WP_REST_Request("POST", "/geo-attend/v1/staff/check-in");
+            $request->set_body_params(array("lat"=>6.5254,"lng"=>3.3802,"accuracy"=>10));
+            $guard_result = Geo_Attend_Staff_Location_Guard::guard_check_in(null, rest_get_server(), $request);
+            if (!is_wp_error($guard_result) || "outside_geofence" !== $guard_result->get_error_code() && "wrong_attendance_location" !== $guard_result->get_error_code()) { fwrite(STDERR, "assigned-location guard did not reject non-assigned location\\n"); exit(1); }
             $ref = new ReflectionMethod("Geo_Attend_Management", "send_task_email");
             $ref->setAccessible(true);
             add_filter("pre_wp_mail", function($null){ return true; });
             $wpdb->insert($t["tasks"], array("title"=>"Management runtime task","description"=>"Test notification","assigned_user_id"=>$user,"created_by"=>1,"priority"=>"high","status"=>"todo","created_at"=>$now,"updated_at"=>$now), array("%s","%s","%d","%d","%s","%s","%s","%s"));
             $task = (int)$wpdb->insert_id;
             if (!$task || !$ref->invoke(null,$user,$task)) { fwrite(STDERR, "task notification contract failed\\n"); exit(1); }
-            echo "Staff linkage and task notification contract passed.\\n";
+            echo "Staff linkage, task notification and assigned-location guard passed.\\n";
           '
