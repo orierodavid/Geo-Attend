@@ -1,0 +1,118 @@
+name: Staff Attendance Runtime
+
+on:
+  push:
+    branches: [staff-portal-auth]
+  pull_request:
+    branches: [main]
+
+jobs:
+  attendance:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wordpress
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mysqli, mbstring
+          tools: wp-cli
+          coverage: none
+      - name: Install WordPress
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wp"
+          cd "$RUNNER_TEMP/wp"
+          wp core download --version=6.8.2 --force
+          wp config create --dbname=wordpress --dbuser=root --dbpass=root --dbhost=127.0.0.1 --skip-check
+          wp core install --url=http://localhost --title='Geo-Attend Staff Attendance Runtime' --admin_user=admin --admin_password='test-password-123!' --admin_email=test@example.com --skip-email
+          mkdir -p wp-content/plugins/geo-attend
+          cp -R "$GITHUB_WORKSPACE"/. wp-content/plugins/geo-attend/
+      - name: PHP and JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          find "$GITHUB_WORKSPACE" -type f -name '*.php' -not -path '*/vendor/*' -print0 | xargs -0 -n1 php -l
+          node --check "$GITHUB_WORKSPACE/assets/js/staff-attendance.js"
+      - name: Verify authenticated staff attendance flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/wp"
+          wp plugin activate geo-attend
+          wp eval '
+            global $wpdb;
+            $t = Geo_Attend_DB::tables();
+            $now = Geo_Attend_DB::now();
+            $day = $now->format("l");
+            $settings = Geo_Attend_DB::settings();
+            $settings["attendance_days"] = array($day);
+            $settings["start_time"] = "00:00";
+            $settings["end_time"] = "23:59";
+            $settings["late_after"] = 15;
+            $settings["max_accuracy"] = 100;
+            update_option("geo_attend_settings", $settings);
+            $sql_now = current_time("mysql");
+            $wpdb->insert($t["departments"], array("name" => "Authenticated Staff", "active" => 1, "created_at" => $sql_now, "updated_at" => $sql_now), array("%s", "%d", "%s", "%s"));
+            $department_id = (int) $wpdb->insert_id;
+            if (!$department_id) { fwrite(STDERR, "Department insert failed\\n"); exit(1); }
+            $user_id = wp_insert_user(array("user_login" => "authstaff", "user_pass" => "test-staff-password", "user_email" => "authstaff@example.com", "first_name" => "Authenticated", "last_name" => "Staff", "role" => "geo_staff"));
+            if (is_wp_error($user_id)) { fwrite(STDERR, "Staff user creation failed: ".$user_id->get_error_message()."\\n"); exit(1); }
+            $wpdb->insert($t["members"], array("user_id" => $user_id, "email" => "authstaff@example.com", "department_id" => $department_id, "first_name" => "Authenticated", "last_name" => "Staff", "pin_hash" => "", "active" => 1, "created_at" => $sql_now, "updated_at" => $sql_now), array("%d", "%s", "%d", "%s", "%s", "%s", "%d", "%s", "%s"));
+            $member_id = (int) $wpdb->insert_id;
+            if (!$member_id) { fwrite(STDERR, "Linked member creation failed\\n"); exit(1); }
+            $wpdb->insert($t["locations"], array("name" => "Staff Workplace", "latitude" => 6.5244, "longitude" => 3.3792, "radius_meters" => 100, "active" => 1, "created_at" => $sql_now, "updated_at" => $sql_now), array("%s", "%f", "%f", "%f", "%d", "%s", "%s"));
+            $location_id = (int) $wpdb->insert_id;
+            if (!$location_id) { fwrite(STDERR, "Location insert failed\\n"); exit(1); }
+
+            wp_set_current_user(0);
+            $unauth = rest_do_request(new WP_REST_Request("GET", "/geo-attend/v1/staff/attendance-status"));
+            if ($unauth->get_status() !== 401) { fwrite(STDERR, "Unauthenticated staff endpoint did not return 401: ".wp_json_encode($unauth->get_data())."\\n"); exit(1); }
+
+            wp_set_current_user($user_id);
+            $status = rest_do_request(new WP_REST_Request("GET", "/geo-attend/v1/staff/attendance-status"));
+            if ($status->get_status() !== 200 || !empty($status->get_data()["attendance"]["checked_in"])) { fwrite(STDERR, "Initial authenticated attendance status failed.\\n"); exit(1); }
+
+            $inside = new WP_REST_Request("POST", "/geo-attend/v1/staff/check-in");
+            $inside->set_header("Content-Type", "application/json");
+            $inside->set_body(wp_json_encode(array("lat" => 6.5244, "lng" => 3.3792, "accuracy" => 10)));
+            $approved = rest_do_request($inside);
+            if ($approved->get_status() !== 200 || empty($approved->get_data()["approved"])) { fwrite(STDERR, "Authenticated staff check-in was not approved: ".wp_json_encode($approved->get_data())."\\n"); exit(1); }
+            $data = $approved->get_data();
+            if ((int)$data["distance_meters"] > 100 || (int)$data["radius_meters"] !== 100) { fwrite(STDERR, "Distance/radius response is incorrect.\\n"); exit(1); }
+            $record = $wpdb->get_row($wpdb->prepare("SELECT member_id, department_id, location_id FROM {$t["attendance"]} WHERE member_id = %d ORDER BY id DESC LIMIT 1", $member_id), ARRAY_A);
+            if (!$record || (int)$record["member_id"] !== $member_id || (int)$record["department_id"] !== $department_id || (int)$record["location_id"] !== $location_id) { fwrite(STDERR, "Authenticated identity/department/location linkage failed.\\n"); exit(1); }
+
+            $duplicate = rest_do_request($inside);
+            if ($duplicate->get_status() !== 409) { fwrite(STDERR, "Duplicate authenticated check-in did not return 409.\\n"); exit(1); }
+
+            $status_after = rest_do_request(new WP_REST_Request("GET", "/geo-attend/v1/staff/attendance-status"));
+            if ($status_after->get_status() !== 200 || empty($status_after->get_data()["attendance"]["checked_in"])) { fwrite(STDERR, "Authenticated attendance status did not become checked-in.\\n"); exit(1); }
+
+            $wpdb->delete($t["attendance"], array("member_id" => $member_id, "attendance_date" => $now->format("Y-m-d")), array("%d", "%s"));
+            $outside = new WP_REST_Request("POST", "/geo-attend/v1/staff/check-in");
+            $outside->set_header("Content-Type", "application/json");
+            $outside->set_body(wp_json_encode(array("lat" => 6.5244, "lng" => 3.3892, "accuracy" => 10)));
+            $outside_response = rest_do_request($outside);
+            if ($outside_response->get_status() !== 403) { fwrite(STDERR, "Outside authenticated geofence did not return 403: ".wp_json_encode($outside_response->get_data())."\\n"); exit(1); }
+            $outside_data = $outside_response->get_data();
+            if (empty($outside_data["data"]["distance_meters"]) || empty($outside_data["data"]["radius_meters"])) { fwrite(STDERR, "Outside response did not include distance/radius.\\n"); exit(1); }
+
+            $wpdb->delete($t["members"], array("id" => $member_id), array("%d"));
+            $missing = rest_do_request(new WP_REST_Request("GET", "/geo-attend/v1/staff/attendance-status"));
+            if ($missing->get_status() !== 409) { fwrite(STDERR, "Missing member linkage did not return 409.\\n"); exit(1); }
+            echo "Authenticated staff identity, GPS approval/rejection, duplicate, linkage and missing-member checks passed.\\n";
+          '
