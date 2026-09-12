@@ -24,6 +24,7 @@ require_once GEO_ATTEND_DIR . 'includes/class-geo-attend-task-guard.php';
 require_once GEO_ATTEND_DIR . 'includes/class-geo-attend-portal-access.php';
 require_once GEO_ATTEND_DIR . 'includes/class-geo-attend-task-attachments.php';
 require_once GEO_ATTEND_DIR . 'includes/class-geo-attend-management.php';
+require_once GEO_ATTEND_DIR . 'includes/class-geo-attend-staff-location-guard.php';
 register_activation_hook( __FILE__, array( 'Geo_Attend_DB', 'activate' ) );
 add_action( 'plugins_loaded', function() {
     Geo_Attend_DB::maybe_upgrade();
@@ -31,7 +32,6 @@ add_action( 'plugins_loaded', function() {
     Geo_Attend_Portal::init();
 
     // Management owns the administrator account/task submission endpoints.
-    // Remove the legacy portal handlers before requests can reach admin-post.php.
     remove_action( 'admin_menu', array( 'Geo_Attend_Portal', 'menu' ) );
     remove_action( 'admin_post_geo_staff_create_account', array( 'Geo_Attend_Portal', 'create_account' ) );
     remove_action( 'admin_post_geo_staff_create_task', array( 'Geo_Attend_Portal', 'create_task' ) );
@@ -40,5 +40,6 @@ add_action( 'plugins_loaded', function() {
     Geo_Attend_Portal_Access::init();
     Geo_Attend_Task_Attachments::init();
     Geo_Attend_Management::init();
+    Geo_Attend_Staff_Location_Guard::init();
     if ( is_admin() ) { Geo_Attend_Admin::init(); }
 } );
