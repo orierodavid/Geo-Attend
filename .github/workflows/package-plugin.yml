@@ -1,0 +1,35 @@
+name: Package Geo-Attend
+
+on:
+  push:
+    branches:
+      - wordpress-integration-test
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build installable plugin ZIP
+        run: |
+          set -e
+          rm -rf build geo-attend.zip
+          mkdir -p build/geo-attend
+          rsync -a --exclude='.git' --exclude='.github' --exclude='build' --exclude='README.md' ./ build/geo-attend/
+          test -f build/geo-attend/geo-attend.php
+          test -d build/geo-attend/includes
+          test -d build/geo-attend/assets
+          cd build
+          zip -r ../geo-attend.zip geo-attend -x 'geo-attend/.git/*'
+          cd ..
+          unzip -l geo-attend.zip | grep -E 'geo-attend/(geo-attend\.php|includes/|assets/)'
+
+      - name: Upload installable WordPress plugin ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: geo-attend-wordpress-plugin
+          path: geo-attend.zip
+          if-no-files-found: error
+          include-hidden-files: false

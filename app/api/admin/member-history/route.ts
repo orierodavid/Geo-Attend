@@ -1,3 +1,0 @@
-import {NextResponse} from 'next/server'
-import {supabaseFetch} from '@/lib/supabase'
-export async function GET(req:Request){try{const u=new URL(req.url);const memberId=u.searchParams.get('memberId');const year=Number(u.searchParams.get('year')||new Date().getFullYear());if(!memberId)return NextResponse.json({error:'Member is required.'},{status:400});const r=await supabaseFetch('rpc/get_member_attendance_history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_member_id:memberId,p_year:year})});if(!r.ok)return NextResponse.json({error:'Unable to load attendance history.'},{status:500});return NextResponse.json(await r.json())}catch{return NextResponse.json({error:'Unable to load attendance history.'},{status:500})}}
